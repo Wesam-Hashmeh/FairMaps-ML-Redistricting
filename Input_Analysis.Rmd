@@ -1,0 +1,407 @@
+---
+title: "Input Data Examination"
+author: "Rebecca Thomson"
+date: "2024-07-18"
+output: html_document
+---
+Libraries used:
+```{r Libraries}
+library(tidyverse)
+#library(Rtools)
+library(redist) #Map Analysis
+library(dplyr)
+library(ggplot2)
+library(alarmdata) #State graph/mapping data
+library(ggredist) #Alarm data mapping
+```
+
+## Load Data from Package and file
+
+The three states we will be analyzing will be:
+Illinois
+Indiana
+Michigan
+
+Please note that some parts of this analysis are very computationally expensive.  When this is the case, each state has been divided into a separate chunk.  It is advisable to only run these chunks as needed.
+
+```{r load}
+
+IL_state_map<-alarm_50state_map('IL')
+MI_state_map<-alarm_50state_map('MI')
+IN_state_map<-alarm_50state_map('IN')
+
+IL_state<-read.csv(file='il_2020_vtd.csv')
+#IN_state<-read.csv(file='in_2020_vtd.csv')
+MI_state<-read.csv(file='mi_2020_vtd.csv')
+```
+
+## Check dimension, NAs
+
+```{r basic}
+
+print("Checking Illinois:")
+dim_to_check<-dim(IL_state_map)
+print("The dimensions of the Illinois input data is: ")
+print(dim_to_check)
+# count total missing values 
+print("Count of total missing values in Illinois Data:  ")
+sum(is.na(IL_state))
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(IL_state))
+
+print("Checking Michigan:")
+dim_to_check<-dim(MI_state_map)
+print("The dimensions of the Michigan input data is: ")
+print(dim_to_check)
+ 
+# count total missing values 
+print("Count of total missing values in Michigan Data:  ")
+sum(is.na(MI_state))
+
+# find location of missing values
+print("Position of missing values ")
+which(is.na(MI_state))
+
+
+```
+
+
+## Input Data Analysis:
+Some basic review of important input variables from the data.
+```{r data info texas}
+#Texas
+# par(mfrow=c(1,2))
+# hist(TX_state$pop, xlab="Population Histogram by sub-area")
+# boxplot(TX_state$pop, xlab="Population Boxplot by sub-area")
+# paste("The range of the population per node is from ", min(TX_state$pop), " to ",max(TX_state$pop))
+# paste("The mean of the population is ", mean(TX_state$pop))
+# par(mfrow=c(1,2))
+# texas_ratio_18<-(TX_state$adv_18/(TX_state$adv_18+TX_state$arv_18))
+# boxplot(texas_ratio_18, xlab="Ratio of Democrats Boxplot by sub-area")
+# texas_ratio_race<-(1-TX_state$pop_white/(TX_state$pop))
+# boxplot(texas_ratio_race, xlab="Ratio of Non-white Population Boxplot by sub-area")
+# par(mfrow=c(1,2))
+# plot(texas_ratio_18,texas_ratio_race, xlab="Ratio of Democratic Voters", ylab="Ratio of non-White Population")
+# plot(texas_ratio_18,TX_state_map$pop, xlab="Ratio of Democratic Voters", ylab="Total Population")
+```
+
+## Input Data Mapping:
+
+Mapping the import data of Illinois for better visualization
+```{r map01-illinois}
+#Illinois
+areas= as.numeric(units::set_units(sf::st_area(IL_state_map$geometry),mi^2))
+plot(IL_state_map, adj=T)
+
+IL_map_plot<-IL_state_map |>
+  ggplot() +
+  geom_sf(aes(fill = ndv / (nrv+ndv)))+
+  scale_fill_party_c() +
+  theme_map()
+IL_map_plot
+
+
+```
+## Redist Maps:
+This will simulate 2 runs of 1,000 District maps using the redist package.  These random sampling 
+ 
+```{r redist maps-illinois}
+#Illinois
+#illinois_plans<-redist_smc(IL_state_map,8000,compactness = 1,runs = 2 )
+print(illinois_plans)
+
+```
+```{r redist maps-michigan}
+#Michigan
+michigan_plans<-redist_smc(MI_state_map,500,compactness = 1,runs = 2 )
+print(michigan_plans)
+
+```
+```{r redist maps-indiana}
+#Indiana
+indiana_plans<-redist_smc(IN_state_map,500,compactness = 1,runs = 2 )
+print(indiana_plans)
+
+```
+## Plot a few examples of the redist plans
+These are a few of the random districting plans made by the redist package.
+
+```{r sample plots-illinois}
+redist.plot.plans(illinois_plans, draws=1:6, shp=IL_state_map)
+```
+
+```{r sample plots-indiana}
+redist.plot.plans(indiana_plans, draws=1:6, shp=IN_state_map)
+```
+```{r sample plots-michigan}
+redist.plot.plans(michigan_plans, draws=1:6, shp=MI_state_map)
+```
+
+## Analyze existing districts to  the redist plans
+
+
+```{r 2020 comparison - illinois}
+#Matching district numbers
+
+illinois_plans_2020<-match_numbers(illinois_plans,IL_state_map$cd_2020)
+
+IL_county_perims2020<- prep_perims(IL_state_map, IL_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+illinois_plans_2020 = illinois_plans_2020 %>%
+  mutate(pop_dev = abs(total_pop / get_target(IL_state_map)-1),
+         comp=comp_polsby(pl(), IL_state_map,perim_df = county_perims2020),
+         pct_min = group_frac(IL_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(IL_state_map,adv_18,adv_18+arv_18))
+
+print(illinois_plans_2020)
+
+```
+
+```{r 2020 comparison - indiana}
+#Matching district numbers
+
+indiana_plans_2020<-match_numbers(indiana_plans,IN_state_map$cd_2020)
+
+IN_county_perims2020<- prep_perims(IN_state_map, IN_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+indiana_plans_2020 = indiana_plans_2020 %>%
+  mutate(pop_dev = abs(total_pop / get_target(IN_state_map)-1),
+         comp=comp_polsby(pl(), IN_state_map,perim_df = county_perims2020),
+         pct_min = group_frac(IN_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(IN_state_map,adv_18,adv_18+arv_18))
+
+print(indiana_plans_2020)
+
+```
+```{r 2020 comparison - Michigan}
+#Matching district numbers
+
+michigan_plans_2020<-match_numbers(michigan_plans,MI_state_map$cd_2020)
+
+#Adding summary statistics for both Census
+
+#MI_county_perims2020<- prep_perims(MI_state_map, MI_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+michigan_plans_2020 = michigan_plans_2020 %>%
+  mutate(pop_dev = abs(total_pop / get_target(MI_state_map)-1),
+         comp=comp_polsby(pl(), MI_state_map,perim_df = county_perims2020),
+         pct_min = group_frac(MI_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(MI_state_map,adv_18,adv_18+arv_18))
+
+print(michigan_plans_2020)
+
+```
+
+## Checking algorithm's Diagnostics
+These are the diagnostics recommended by the package.  Our first problem is that the SMC runs did not converge with 500 samples, so the original texas_plans had to be re-done with more samples.
+
+Other factors that must be checked are:
+low effective samples
+very low acceptance rates (less than 1%)
+large std. devs. of the log weights (more than ~3)
+low numbers of unique plans.
+R-hat values for summary should be between 1 and 1.05
+
+```{r Diagnostics-illinois}
+summary(illinois_plans_2020)
+
+```
+```{r Diagnostics-indiana}
+summary(indiana_plans_2020)
+
+```
+```{r Diagnostics-michigan}
+summary(michigan_plans_2020)
+
+```
+## Histograms of random plans
+These are a few of the random districting plans made by the redist package.
+
+```{r hist-texas}
+#hist(plans_diversity(texas_plans_2020), breaks=24)
+```
+```{r hist-illinois}
+hist(plans_diversity(illinois_plans_2020), breaks=24)
+```
+
+```{r post-run analysis-illinois}
+
+```
+
+
+Texas saved diagnositic information, just for tuning purposes.
+
+With 2000 samples:
+
+Plan diversity 80% range: 0.21 to 1.10
+✖ WARNING: Low plan diversity
+
+R-hat values for summary statistics:
+pop_overlap     pop_dev        comp     pct_min     pct_dem 
+    ❌1.074       1.043     ❌1.151     ❌1.101     ❌1.243 
+✖ WARNING: SMC runs have not converged.
+
+Sampling diagnostics for SMC run 1 of 2 (2,000 samples)
+
+Sampling diagnostics for SMC run 2 of 2 (2,000 samples)
+
+For 2 runs of 4000:
+Plan diversity 80% range: 0.1 to 1.1
+✖ WARNING: Low plan diversity
+
+R-hat values for summary statistics:
+pop_overlap     pop_dev        comp     pct_min     pct_dem 
+    ❌1.224     ❌1.703     ❌2.181     ❌2.125     ❌2.291 
+✖ WARNING: SMC runs have not converged.
+
+Sampling diagnostics for SMC run 1 of 2 (4,000 samples)
+
+Sampling diagnostics for SMC run 2 of 2 (4,000 samples)
+
+
+
+#Ilinois info saved
+SMC: 4,000 sampled plans of 17 districts on 10,084 units
+`adapt_k_thresh`=0.99 • `seq_alpha`=0.5
+`est_label_mult`=1 • `pop_temper`=0
+
+Plan diversity 80% range: 1.0 to 1.1
+
+R-hat values for summary statistics:
+pop_overlap     pop_dev        comp     pct_min     pct_dem 
+      1.046       1.038     ❌1.093       1.005       1.004 
+✖ WARNING: SMC runs have not converged.
+
+Sampling diagnostics for SMC run 1 of 2 (2,000 samples)
+
+Sampling diagnostics for SMC run 2 of 2 (2,000 samples)
+
+•  Watch out for low effective samples, very low acceptance rates (less than 1%), large std.
+devs. of the log weights (more than 3 or so), and low numbers of unique plans. R-hat values
+for summary statistics should be between 1 and 1.05.
+• SMC convergence: Increase the number of samples. If you are experiencing low plan
+diversity or bottlenecks as well, address those issues first.
+
+SMC: 8,000 sampled plans of 17 districts on 10,084 units
+`adapt_k_thresh`=0.99 • `seq_alpha`=0.5
+`est_label_mult`=1 • `pop_temper`=0
+
+#
+
+Plan diversity 80% range: 1.0 to 1.1
+
+R-hat values for summary statistics:
+pop_overlap     pop_dev        comp     pct_min     pct_dem 
+      1.021       1.013       1.032     ❌1.055       1.044 
+✖ WARNING: SMC runs have not converged.
+
+Sampling diagnostics for SMC run 1 of 2 (4,000 samples)
+
+Sampling diagnostics for SMC run 2 of 2 (4,000 samples)
+
+•  Watch out for low effective samples, very low acceptance rates (less than 1%), large std.
+devs. of the log weights (more than 3 or so), and low numbers of unique plans. R-hat values
+for summary statistics should be between 1 and 1.05.
+• SMC convergence: Increase the number of samples. If you are experiencing low plan
+diversity or bottlenecks as well, address those issues first.
+
+#
+
+SMC: 16,000 sampled plans of 17 districts on 10,084 units
+`adapt_k_thresh`=0.99 • `seq_alpha`=0.5
+`est_label_mult`=1 • `pop_temper`=0
+
+Plan diversity 80% range: 0.99 to 1.11
+
+R-hat values for summary statistics:
+pop_overlap     pop_dev        comp     pct_min     pct_dem 
+    ❌1.065       1.028       1.009       1.014       1.010 
+✖ WARNING: SMC runs have not converged.
+
+Sampling diagnostics for SMC run 1 of 2 (8,000 samples)
+
+Sampling diagnostics for SMC run 2 of 2 (8,000 samples)
+
+I do not want to throw out my code for texas yet
+
+```{r texas code}
+#TX_state_map<-alarm_50state_map('TX')
+# print("Checking Texas:")
+# dim_to_check<-dim(TX_state_map)
+# print("The dimensions of the Texas input data is: ")
+# print(dim_to_check)
+# 
+# # count total missing values 
+# print("Count of total missing values in Texas Data:  ")
+# sum(is.na(TX_state))
+# 
+# # find location of missing values
+# print("Position of missing values ")
+# which(is.na(TX_state))
+
+```
+```{r map01-texas}
+# #Texas
+# areas= as.numeric(units::set_units(sf::st_area(TX_state_map$geometry),mi^2))
+# plot(TX_state_map, adj=T)
+# 
+# TX_map_plot<-TX_state_map |>
+#   ggplot() +
+#   geom_sf(aes(fill = ndv / (nrv+ndv)))+
+#   scale_fill_party_c() +
+#   theme_map()
+# TX_map_plot
+
+
+```
+
+maps will enable us to analyze our proposed maps against randomly generated plans. 
+```{r redist maps-texas}
+#Texas
+# texas_plans<-redist_smc(TX_state_map,1000,compactness = 1,runs = 2 )
+# print(texas_plans)
+
+```
+
+```{r sample plots-texas}
+#redist.plot.plans(texas_plans, draws=1:6, shp=TX_state_map)
+```
+
+
+```{r 2020 comparison - texas}
+# #Matching district numbers
+# #texas_2010_map<-match_numbers(texas_plans,TX_state_map$cd_2010)
+# texas_plans_2020<-match_numbers(texas_plans,TX_state_map$cd_2020)
+# #print(texas_plans)
+# #Adding summary statistics for both Census
+# #county_perims2010<- prep_perims(texas_2010_map, TX_state_map$adj)
+# county_perims2020<- prep_perims(TX_state_map, TX_state_map$adj)
+# 
+# #we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+# 
+# texas_plans_2020 = texas_plans_2020 %>%
+#   mutate(pop_dev = abs(total_pop / get_target(TX_state_map)-1),
+#          comp=comp_polsby(pl(), TX_state_map,perim_df = county_perims2020),
+#          pct_min = group_frac(TX_state_map, vap-vap_white,vap),
+#          pct_dem= group_frac(TX_state_map,adv_18,adv_18+arv_18))
+# 
+# print(texas_plans_2020)
+
+```
+
+
+```{r Diagnostics-texas}
+#summary(texas_plans_2020)
+
+```
+
+
+
