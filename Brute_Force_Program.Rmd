@@ -1,0 +1,191 @@
+---
+title: "Main Program for Final Project"
+author: "Rebecca Thomson"
+date: "2024-07-16"
+output: html_document
+---
+This is the main program for analyzing District Maps.  
+'Input_Analysis.Rmd' will analyze and check input data.
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Packages to install,commented out is default.
+
+#install.packages("dplyr")
+#install.packages("gglot2")
+#install.packages("redist")
+#install.packages("Rtools")
+#install.packages("alarmdata")
+#install.packages('ggredist')
+
+```
+
+## Libraries
+
+These are all the libraries used for the project.  We have tried to comment which part they were first called for use.
+
+```{r Libraries}
+library(tidyverse)
+#library(Rtools)
+library(redist) #Map Analysis
+library(dplyr)
+library(ggplot2)
+library(alarmdata) #State graph/mapping data
+library(ggredist) #Alarm data mapping
+library(rlist)
+```
+
+## Global Provided Information and Constraints
+The global information and constraints are not changed during any algorithm or analysis, except addition of proposed Congressional Districts when the creation algorithm is completed.
+This information will be modified for each state analyzed.
+
+These are the variables that are global: 
+-Loading initial state information (selecting which state to analyze)
+-The list of Final District node choices.  It is a list of lists of what nodes are in created districts, it shall be modified by our analysis and starts out empty.
+
+These are the constraints that are global:
+-Required number of Districts
+-The range of population values allowed in each district.  Historically, this is plus or minus 1% of the Total Population/Number of Districts.
+
+
+```{r Base Global Information}
+#Selecting state and entering base information
+This_State<-read.csv(file='ks_2020_vtd.txt')
+This_state_map<-alarm_50state_map('KS')
+
+#Code in number of Districts
+number_districts<- 2 #Hard-coded number of Congressional Districts, the minimum is two.
+
+#Create Empty list of future districts- final_district
+final_district<-vector(mode="list",number_districts)
+
+#Calculate Total Population
+tot_pop<-sum(This_State$pop)
+
+#Calculate Population_Range
+each_dist<-tot_pop/number_districts
+Population_Range<-c(each_dist-0.01*each_dist,each_dist+0.01*each_dist)
+
+```
+
+## Create list of Nodes Function
+
+This function produces an original list of all nodes.  It is a list of lists, where each list is: 
+
+[[original node index(integer)],                 
+[raw population number of node(integer)],
+[list of adjacent nodes by original index number],
+[0 (for later tracking in other functions, integer)]]
+
+The purpose of this function is to:
+-Protect the original data from loss or corruption.
+-Isolate each node into its own list for ease of analysis.  This will make creating lists of nodes within districts and lists of adjacent nodes easier.
+```{r All Nodes Original List}
+create_node_list<-function(){
+all_nodes_adjlist<- This_state_map$adj
+all_nodes_poplist<-This_state_map$pop
+all_nodes_index<-1:(length(This_state_map$pop))
+all_nodes_all_list<-vector(mode='list',(length(This_state_map$pop)))
+for (i in 1:(length(all_nodes_poplist))){
+  temp_list<-vector(mode="list",4)
+  temp_list[1]<-all_nodes_index[i]
+  temp_list[2]<-all_nodes_poplist[i]
+  temp_list[3]<-all_nodes_adjlist[i]
+  temp_list[4]<-c(0)
+  #print(temp_list)
+  all_nodes_all_list[[i]]<-temp_list
+
+}
+return (all_nodes_all_list)
+}
+
+```
+
+
+## R function to Remove a node from the Adjacency list
+This function takes in the adjacency list and the node to be removed from the list.  The function should be used when a node is added to the district being built. 
+The function removes the node from the adjacency list, removes any mention of the node in other nodes' lists, and increases the count of adjacencies within those node's adjacency list.
+
+```{r function to remove node }
+
+node.to.remove<-function(adjacency.list,remove.this.node){
+  
+  #First, the node must be removed from other node's adjacency lists.  We do not need to keep track of which nodes are adjacent to our district sub-graph, because all nodes in the adjacency list are connected to the district.
+  #Second, while we are removing the node from the exterior node's adjacency lists, we need to update the Number of Connections each exterior and adjacent node has to the district sub-graph.
+  for (i in (length(adjacency.list)):1){
+    for (j in (length(adjacency.list[[i]][[3]])):1){
+      if ((as.numeric(adjacency.list[[i]][[3]][j]))==remove.this.node){
+        adjacency.list[[i]][[3]][j]<- NA #
+        adjacency.list[[i]][[4]][[1]]<-1+as.numeric(adjacency.list[[i]][[4]][[1]])
+      
+      }
+    }
+  }
+  #Lastst, remove this node from the adjacency list.  It is only listed once, so it will not cause problems with our iteration.
+  for (i in (length(adjacency.list)):1){
+    if((as.numeric(adjacency.list[[i]][[1]]))==remove.this.node){
+      #adjacency.list[[i]][[1]][1]<- NA
+      adjacency.list[[i]]<-NA
+      list.remove(adjacency.list, c(i))
+    }
+  }
+  return(adjacency.list)
+}
+```
+## R function to add node to Adjacency List
+GLOBALNODELIST is the Global-level list that is a modifiable list of all the nodes that have not yet been used to build districts.  It shall be modified with a different function.
+
+This function shall copy the node from the exterior node list and place it in the adjacency list.  It shall return the adjacency list.
+
+```{r function to add node}
+add.node<-function(node.to.add,a.adjacency.list){
+  #Build the list of lists to add to adjacency list
+  for (i in (length(GLOBALNODELIST)):1){
+    if(((as.numeric(GLOBALNODELIST[[i]][[1]]))==node.to.add)){
+      #building individual node list to bring into adjacency list
+      temp1<-list()
+      temp1[1]<-(as.numeric(GLOBALNODELIST[[i]][[1]]))
+      temp2<-list()
+      temp2[1]<-(as.numeric(GLOBALNODELIST[[i]][[2]]))
+      temp3<-1:length(GLOBALNODELIST[[i]][[3]])
+      for (j in 1:(length(GLOBALNODELIST[[i]][[3]]))){
+        temp3[j]<-GLOBALNODELIST[[i]][[3]][j]
+        }
+      temp4<-list()
+      temp4[1]<-(as.numeric(GLOBALNODELIST[[i]][[4]]))
+      templist<-list(temp1,temp2,temp3,temp4)
+      a.adjacency.list[[(length(a.adjacency.list)+1)]]<-templist #Add node to adjacency
+      
+    }
+  }
+  
+  return (a.adjacency.list)
+}
+
+```
+
+#Function to remove node from possible exterior nodes list.
+When a node is selected, run this code to remove the node from the exterior node list.
+
+
+```{r test new node added to adjacency list}
+exterior.node.removal<-function(removed.node,Global.exterior.node.list){
+  for (i in (length(Global.exterior.node.list)):1){
+    if ((as.numeric(Global.exterior.node.list[[i]][[1]]))==removed.node){
+      Global.exterior.node.list[[i]]<- NA #Remove node from global node
+      list.remove(Global.exterior.node.list, c(i))
+      }
+  }
+  return (Global.exterior.node.list)
+}
+```
+
+## "Global Created Information ("Main")
+The created information here is the heart of the program.  It will create lists of nodes and drive functions that will create districts.
+
+```{r Base Global Information}
+#Iterate-able list of all nodes.
+Global_Nodes_List<-create_node_list()
+
+
+```
