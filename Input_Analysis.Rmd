@@ -27,12 +27,12 @@ Please note that some parts of this analysis are very computationally expensive.
 ```{r load}
 
 IL_state_map<-alarm_50state_map('IL')
-MI_state_map<-alarm_50state_map('MI')
-IN_state_map<-alarm_50state_map('IN')
+#MI_state_map<-alarm_50state_map('MI')
+#IN_state_map<-alarm_50state_map('IN')
 
 IL_state<-read.csv(file='il_2020_vtd.csv')
 #IN_state<-read.csv(file='in_2020_vtd.csv')
-MI_state<-read.csv(file='mi_2020_vtd.csv')
+#MI_state<-read.csv(file='mi_2020_vtd.csv')
 ```
 
 ## Check dimension, NAs
@@ -50,19 +50,19 @@ sum(is.na(IL_state))
 # find location of missing values
 print("Position of missing values ")
 which(is.na(IL_state))
-
-print("Checking Michigan:")
-dim_to_check<-dim(MI_state_map)
-print("The dimensions of the Michigan input data is: ")
-print(dim_to_check)
- 
-# count total missing values 
-print("Count of total missing values in Michigan Data:  ")
-sum(is.na(MI_state))
-
-# find location of missing values
-print("Position of missing values ")
-which(is.na(MI_state))
+# 
+# print("Checking Michigan:")
+# dim_to_check<-dim(MI_state_map)
+# print("The dimensions of the Michigan input data is: ")
+# print(dim_to_check)
+#  
+# # count total missing values 
+# print("Count of total missing values in Michigan Data:  ")
+# sum(is.na(MI_state))
+# 
+# # find location of missing values
+# print("Position of missing values ")
+# which(is.na(MI_state))
 
 
 ```
@@ -86,6 +86,34 @@ Some basic review of important input variables from the data.
 # plot(texas_ratio_18,texas_ratio_race, xlab="Ratio of Democratic Voters", ylab="Ratio of non-White Population")
 # plot(texas_ratio_18,TX_state_map$pop, xlab="Ratio of Democratic Voters", ylab="Total Population")
 ```
+```{r data info Illinois}
+areas= as.numeric(units::set_units(sf::st_area(IL_state_map$geometry),mi^2))
+illinois_ratio_18<-(IL_state$adv_18/(IL_state$adv_18+IL_state$arv_18))
+illinois_ratio_race<-(1-IL_state$pop_white/(IL_state$pop))
+Illinois_pop_density<-IL_state$pop/areas
+all_ones<-factor(IL_state$state)
+IL_data<-data.frame(areas,illinois_ratio_18,illinois_ratio_race,Illinois_pop_density,all_ones)
+
+par(mfrow=c(1,2))
+hist(IL_state$pop, xlab="Population by node", main = "Total Population by node")
+boxplot(IL_state$pop, xlab="Population Boxplot by node")
+paste("The range of the population per node is from ", min(IL_state$pop), " to ",max(IL_state$pop))
+paste("The mean of the population is ", mean(IL_state$pop))
+par(mfrow=c(1,2))
+
+boxplot(illinois_ratio_18, xlab="Ratio of Democrats Boxplot by node")
+
+boxplot(illinois_ratio_race, xlab="Ratio of Non-white Population Boxplot by node")
+par(mfrow=c(1,2))
+plot(illinois_ratio_18,illinois_ratio_race, xlab="Ratio of Democratic Voters", ylab="Ratio of non-White Population", main = "Minority Ratio to Voting History Ratio per node")
+abline(lm(illinois_ratio_race~illinois_ratio_18), col='red')
+plot(illinois_ratio_18,IL_state_map$pop, xlab="Ratio of Democratic Voters", ylab="Total Population",main = "Voting History Ratio to Total Population per node")
+abline(lm(IL_state_map$pop~illinois_ratio_18), col='red')
+
+plot(Illinois_pop_density,illinois_ratio_18)
+```
+
+
 
 ## Input Data Mapping:
 
@@ -95,6 +123,7 @@ Mapping the import data of Illinois for better visualization
 areas= as.numeric(units::set_units(sf::st_area(IL_state_map$geometry),mi^2))
 plot(IL_state_map, adj=T)
 
+#plot(IL_state_map, adj=T, xlim= c(0,1), ylim= c(0,1))
 IL_map_plot<-IL_state_map |>
   ggplot() +
   geom_sf(aes(fill = ndv / (nrv+ndv)))+
@@ -109,34 +138,34 @@ This will simulate 2 runs of 1,000 District maps using the redist package.  Thes
  
 ```{r redist maps-illinois}
 #Illinois
-#illinois_plans<-redist_smc(IL_state_map,8000,compactness = 1,runs = 2 )
+illinois_plans<-redist_smc(IL_state_map,4000,compactness = 1,runs = 2 )
 print(illinois_plans)
 
 ```
 ```{r redist maps-michigan}
-#Michigan
-michigan_plans<-redist_smc(MI_state_map,500,compactness = 1,runs = 2 )
-print(michigan_plans)
+# #Michigan
+# michigan_plans<-redist_smc(MI_state_map,500,compactness = 1,runs = 2 )
+# print(michigan_plans)
 
 ```
 ```{r redist maps-indiana}
-#Indiana
-indiana_plans<-redist_smc(IN_state_map,500,compactness = 1,runs = 2 )
-print(indiana_plans)
+# #Indiana
+# indiana_plans<-redist_smc(IN_state_map,500,compactness = 1,runs = 2 )
+# print(indiana_plans)
 
 ```
 ## Plot a few examples of the redist plans
 These are a few of the random districting plans made by the redist package.
 
 ```{r sample plots-illinois}
-redist.plot.plans(illinois_plans, draws=1:6, shp=IL_state_map)
+redist.plot.plans(illinois_plans, draws=c("cd_2020","1","2","300","2000","3001"), shp=IL_state_map)
 ```
 
 ```{r sample plots-indiana}
-redist.plot.plans(indiana_plans, draws=1:6, shp=IN_state_map)
+#redist.plot.plans(indiana_plans, draws=1:6, shp=IN_state_map)
 ```
 ```{r sample plots-michigan}
-redist.plot.plans(michigan_plans, draws=1:6, shp=MI_state_map)
+#redist.plot.plans(michigan_plans, draws=1:6, shp=MI_state_map)
 ```
 
 ## Analyze existing districts to  the redist plans
@@ -153,7 +182,7 @@ IL_county_perims2020<- prep_perims(IL_state_map, IL_state_map$adj)
 
 illinois_plans_2020 = illinois_plans_2020 %>%
   mutate(pop_dev = abs(total_pop / get_target(IL_state_map)-1),
-         comp=comp_polsby(pl(), IL_state_map,perim_df = county_perims2020),
+         comp=comp_polsby(pl(), IL_state_map,perim_df = IL_county_perims2020),
          pct_min = group_frac(IL_state_map, vap-vap_white,vap),
          pct_dem= group_frac(IL_state_map,adv_18,adv_18+arv_18))
 
@@ -163,40 +192,40 @@ print(illinois_plans_2020)
 
 ```{r 2020 comparison - indiana}
 #Matching district numbers
-
-indiana_plans_2020<-match_numbers(indiana_plans,IN_state_map$cd_2020)
-
-IN_county_perims2020<- prep_perims(IN_state_map, IN_state_map$adj)
-
-#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
-
-indiana_plans_2020 = indiana_plans_2020 %>%
-  mutate(pop_dev = abs(total_pop / get_target(IN_state_map)-1),
-         comp=comp_polsby(pl(), IN_state_map,perim_df = county_perims2020),
-         pct_min = group_frac(IN_state_map, vap-vap_white,vap),
-         pct_dem= group_frac(IN_state_map,adv_18,adv_18+arv_18))
-
-print(indiana_plans_2020)
+# 
+# indiana_plans_2020<-match_numbers(indiana_plans,IN_state_map$cd_2020)
+# 
+# IN_county_perims2020<- prep_perims(IN_state_map, IN_state_map$adj)
+# 
+# #we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+# 
+# indiana_plans_2020 = indiana_plans_2020 %>%
+#   mutate(pop_dev = abs(total_pop / get_target(IN_state_map)-1),
+#          comp=comp_polsby(pl(), IN_state_map,perim_df = county_perims2020),
+#          pct_min = group_frac(IN_state_map, vap-vap_white,vap),
+#          pct_dem= group_frac(IN_state_map,adv_18,adv_18+arv_18))
+# 
+# print(indiana_plans_2020)
 
 ```
 ```{r 2020 comparison - Michigan}
 #Matching district numbers
-
-michigan_plans_2020<-match_numbers(michigan_plans,MI_state_map$cd_2020)
-
-#Adding summary statistics for both Census
-
-#MI_county_perims2020<- prep_perims(MI_state_map, MI_state_map$adj)
-
-#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
-
-michigan_plans_2020 = michigan_plans_2020 %>%
-  mutate(pop_dev = abs(total_pop / get_target(MI_state_map)-1),
-         comp=comp_polsby(pl(), MI_state_map,perim_df = county_perims2020),
-         pct_min = group_frac(MI_state_map, vap-vap_white,vap),
-         pct_dem= group_frac(MI_state_map,adv_18,adv_18+arv_18))
-
-print(michigan_plans_2020)
+# 
+# michigan_plans_2020<-match_numbers(michigan_plans,MI_state_map$cd_2020)
+# 
+# #Adding summary statistics for both Census
+# 
+# #MI_county_perims2020<- prep_perims(MI_state_map, MI_state_map$adj)
+# 
+# #we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+# 
+# michigan_plans_2020 = michigan_plans_2020 %>%
+#   mutate(pop_dev = abs(total_pop / get_target(MI_state_map)-1),
+#          comp=comp_polsby(pl(), MI_state_map,perim_df = county_perims2020),
+#          pct_min = group_frac(MI_state_map, vap-vap_white,vap),
+#          pct_dem= group_frac(MI_state_map,adv_18,adv_18+arv_18))
+# 
+# print(michigan_plans_2020)
 
 ```
 
@@ -215,11 +244,11 @@ summary(illinois_plans_2020)
 
 ```
 ```{r Diagnostics-indiana}
-summary(indiana_plans_2020)
+#summary(indiana_plans_2020)
 
 ```
 ```{r Diagnostics-michigan}
-summary(michigan_plans_2020)
+#summary(michigan_plans_2020)
 
 ```
 ## Histograms of random plans
