@@ -134,9 +134,9 @@ node.to.remove<-function(remove.this.node){
   #Lastly, remove this node from the adjacency list.  It is only listed once, so it will not cause problems with our iteration.
   for (i in (length(adj.list)):1){
     if((as.numeric(adj.list[[i]][[1]]))==as.numeric(remove.this.node)){
-      #adjacency.list[[i]][[1]][1]<- NA
+      
       adj.list[[i]]<-NA
-      list.remove(adj.list, c(i))
+      #list.remove(adj.list, c(i))
     }
   }
   
@@ -157,13 +157,15 @@ add.node<-function(new.adj.node){
       #building individual node list to bring into adjacency list
       temp1<-list()
       temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[1]]))
-      
+      (4177)
       temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[2]]))
       temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[i]][[3]]
-      
-      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[4]]))
+      #Remember that these nodes are now connected to the district list, and should start with +1 adjacency.
+      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[4]])+1)
       
       adj.list[[(length(adj.list)+1)]]<-temp1 #Add node to adjacency
+      #And remove all traces of node from the exterior list
+      exterior.node.removal(new.adj.node)
     }
   }
   
@@ -189,7 +191,7 @@ exterior.node.removal<-function(removed.node){
 ```
 ## Function to add node to District list
 This function shall take in the node to be added.  It shall add the node to the district list.
-The district.temp list is a global variable, but for ease between functions it is re-created for each 'run'.
+The district.temp list is a global variable'.
 ```{r add new node to district}
 node.to.add<-function(add.this.node){
   #district.temp
@@ -207,24 +209,9 @@ node.to.add<-function(add.this.node){
       
       temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[4]]))
       #templist<-list(temp1,temp2,temp3,temp4)
-      district.temp[[length(district.temp)+1]]<-temp1 #Add node to adjacency
-      temp.pop<=temp.pop+adj.list[[i]][[2]]#Add population, so district will stop growing when it needs to.
-      #Once the node is found and added, we can break the loop
-      #break
-      
-      # temp1<-list()
-      # temp1[1]<-(as.numeric(adj.list[[i]][[1]]))
-      # temp2<-list()
-      # temp2[1]<-(as.numeric(adj.list[[i]][[2]]))
-      # temp3<-1:length(adj.list[[i]][[3]])
-      # for (j in 1:(length(adj.list[[i]][[3]]))){
-      #   temp3[j]<-adj.list[[i]][[3]][j]
-      #   }
-      # temp4<-list()
-      # temp4[1]<-(as.numeric(adj.list[[i]][[4]]))
-      # templist<-list(temp1,temp2,temp3,temp4)
-      # district.temp[[(length(district.temp)+1)]]<-templist #Add node to district
-      
+      district.temp[[length(district.temp)+1]]<-temp1 #Add node to district
+      temp.pop<=temp.pop+adj.list[[i]][[2]]#Add population, so district will stop growing 
+      #When 
     }
   }
 }
@@ -246,24 +233,19 @@ pick.new.node<- function(temp.pop){
     }
   }
   
-  #>
-  # temp.max<-adj.list[which(unlist(lapply(adj.list,function(x) as.numeric(x[4])))==max(unlist(lapply(adj.list,function(x) as.numeric(x[4])))))]
-  # for (i in 1:length(temp.max)){
-  # #Check pop. if ok, return a value
-  # ifelse((temp.pop+as.integer(adj.list[[i]][[2]])<Population_Range[2]), return(as.numeric(adj.list[[i]][[1]])))
-  # }
   return (node.number)
 }
-#GLOBALNODESLIST[which(unlist(lapply(GLOBALNODESLIST,function(x) #as.numeric(x[4])))==which.max(unlist(lapply(GLOBALNODESLIST,function(x) as.numeric(x[4])))))]
+
 ```
 
 ## Function to update the Adjacency List when node add to district
 This function is given a list of the nodes that were adjacent to the node just added to the district.  It will check if these nodes are within the adj.list, and if not, will add them.  
 
 ```{r adj list update}
-adj.list.update<-function(list.of.new.adj.nodes){
-  for (k in 1:(length(list.of.new.adj.nodes))){ #loop through nodes to check
+adj.list.update<-function(list.new.adj.nodes){
+  for (k in 1:(length(list.new.adj.nodes))){ #loop through nodes to check
     It.is.here<-0
+    
     for (i in 1: length(adj.list)){#for each node, check adj.list
       if(as.numeric(list.of.new.adj.nodes[k])==(as.numeric(adj.list[[i]][[1]]))){
         It.is.here=1
@@ -274,12 +256,29 @@ adj.list.update<-function(list.of.new.adj.nodes){
     }
     if (It.is.here==0){ #add the new node in the adjacency list
       add.node(as.numeric(list.of.new.adj.nodes[k]))
-      }
-    
-    #And remove all traces of node from the exterior list
-    exterior.node.removal(as.numeric(list.of.new.adj.nodes[i]))
+    }
   }
+ 
   
+  
+  # for (k in 1:(length(First.adj))){ #loop through nodes to check
+  #   It.is.here<-0
+  #   
+  #   for (i in 1: length(adj.list)){#for each node, check adj.list
+  #     print("check")
+  #     if(as.numeric(First.adj[k])==(as.numeric(adj.list[[i]][[1]]))){
+  #       It.is.here=1
+  #       #Update count
+  #       adj.list[[i]][[4]]<-as.numeric(adj.list[[i]][[1]])+1
+  #     }
+  #    
+  #   }
+  #   if (It.is.here==0){ #add the new node in the adjacency list
+  #     print("adding ")
+  #     print(First.adj[k])
+  #     add.node(First.adj[k])
+  #   }
+  # } 
   
 }
 ```
