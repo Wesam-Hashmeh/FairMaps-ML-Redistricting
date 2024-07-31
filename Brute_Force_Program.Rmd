@@ -69,11 +69,12 @@ Population_Range<-c((tot_pop/number_districts)-0.01*(tot_pop/number_districts), 
 ## Create list of Nodes Function
 
 This function produces an original list of all nodes.  It is a list of lists, where each list is: 
-
-[[original node index(integer)],                 
+[
+[(original node index(integer)],                 
 [raw population number of node(integer)],
-[list of adjacent nodes by original index number],
-[0 (for later tracking in other functions, integer)]]
+[list of adjacent nodes by original index number[],[],[]....],
+[0 (for later tracking in other functions, integer)]
+]
 
 The purpose of this function is to:
 -Protect the original data from loss or corruption.
@@ -83,15 +84,16 @@ create_node_list<-function(){
 all_nodes_adjlist<- This_state_map$adj
 all_nodes_poplist<-This_state_map$pop
 all_nodes_index<-1:(length(This_state_map$pop))
-all_nodes_all_list<-vector(mode='list',(length(This_state_map$pop)))
+all_nodes_all_list<-list()
 for (i in 1:(length(all_nodes_poplist))){
-  temp_list<-vector(mode="list",4)
-  temp_list[1]<-all_nodes_index[i]
-  temp_list[2]<-all_nodes_poplist[i]
-  temp_list[3]<-all_nodes_adjlist[i]
-  temp_list[4]<-c(0)
-  #print(temp_list)
-  all_nodes_all_list[[i]]<-temp_list
+  temp_list<-list()
+  temp_list[[length(temp_list)+1]]<-all_nodes_index[[i]]
+  temp_list[[length(temp_list)+1]]<-all_nodes_poplist[i]
+  temp_list[[length(temp_list)+1]]<-all_nodes_adjlist[[i]]
+  
+  temp_list[length(temp_list)+1]<-c(0)
+  
+  all_nodes_all_list[[length(all_nodes_all_list)+1]]<-temp_list
 
 }
 return (all_nodes_all_list)
@@ -105,7 +107,7 @@ return (all_nodes_all_list)
 GLOBALNODESLIST<-create_node_list()
 
 #Original Nodes - DO NOT MODIFY!
-Global_Nodes_List<-create_node_list()
+Unmodified_Global_Nodes_List<-create_node_list()
 
 
 ```
@@ -122,16 +124,16 @@ node.to.remove<-function(remove.this.node){
   #Second, while we are removing the node from the exterior node's adjacency lists, we need to update the Number of Connections each exterior and adjacent node has to the district sub-graph.
   for (i in (length(adj.list)):1){
     for (j in (length(adj.list[[i]][[3]])):1){
-      if ((as.numeric(adj.list[[i]][[3]][j]))==remove.this.node){
+      if ((as.numeric(adj.list[[i]][[3]][j]))==as.numeric(remove.this.node)){
         adj.list[[i]][[3]][j]<- NA #
         adj.list[[i]][[4]][[1]]<-1+as.numeric(adj.list[[i]][[4]][[1]])
       
       }
     }
   }
-  #Lastst, remove this node from the adjacency list.  It is only listed once, so it will not cause problems with our iteration.
+  #Lastly, remove this node from the adjacency list.  It is only listed once, so it will not cause problems with our iteration.
   for (i in (length(adj.list)):1){
-    if((as.numeric(adj.list[[i]][[1]]))==remove.this.node){
+    if((as.numeric(adj.list[[i]][[1]]))==as.numeric(remove.this.node)){
       #adjacency.list[[i]][[1]][1]<- NA
       adj.list[[i]]<-NA
       list.remove(adj.list, c(i))
@@ -146,24 +148,22 @@ GLOBALNODELIST is the Global-level list that is a modifiable list of all the nod
 This function shall copy the node from the exterior node list and place it in the adjacency list.  It shall return nothing, since adj.list is a global variable that is set to zero when each new district is created.
 
 ```{r function to add node}
-add.node<-function(node.to.add){
-  #Build the list of lists to add to adjacency list
+add.node<-function(new.adj.node){
+  #Build the list of lists to add to adjacency list, this is to check that the node given is in the GLOBALNODESLIST
   for (i in (length(GLOBALNODESLIST)):1){
-    if(((as.numeric(GLOBALNODESLIST[[i]][[1]]))==node.to.add)){
+    if(as.numeric(GLOBALNODESLIST[[i]][[1]])==as.numeric(new.adj.node)){
+      
+      
       #building individual node list to bring into adjacency list
       temp1<-list()
-      temp1[1]<-(as.numeric(GLOBALNODESLIST[[i]][[1]]))
-      temp2<-list()
-      temp2[1]<-(as.numeric(GLOBALNODESLIST[[i]][[2]]))
-      temp3<-1:length(GLOBALNODESLIST[[i]][[3]])
-      for (j in 1:(length(GLOBALNODESLIST[[i]][[3]]))){
-        temp3[j]<-GLOBALNODESLIST[[i]][[3]][j]
-        }
-      temp4<-list()
-      temp4[1]<-(as.numeric(GLOBALNODESLIST[[i]][[4]]))
-      templist<-list(temp1,temp2,temp3,temp4)
-      adj.list[[(length(adj.list)+1)]]<-templist #Add node to adjacency
+      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[1]]))
       
+      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[2]]))
+      temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[i]][[3]]
+      
+      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[4]]))
+      
+      adj.list[[(length(adj.list)+1)]]<-temp1 #Add node to adjacency
     }
   }
   
@@ -176,10 +176,10 @@ When a node is selected, run this code to remove the node from the exterior node
 The exterior node list is GLOBALNODESLIST, and it is a Global variable.
 Nothing is returned.
 
-```{r test new node added to adjacency list}
+```{r new adj node removed from exterior/GLOBAL list}
 exterior.node.removal<-function(removed.node){
   for (i in (length(GLOBALNODESLIST)):1){
-    if ((as.numeric(GLOBALNODESLIST[[i]][[1]]))==removed.node){
+    if ((as.numeric(GLOBALNODESLIST[[i]][[1]]))==as.numeric(removed.node)){
       GLOBALNODESLIST[[i]]<- NA #Remove node from global node
       list.remove(GLOBALNODESLIST, c(i))
       }
@@ -193,22 +193,37 @@ The district.temp list is a global variable, but for ease between functions it i
 ```{r add new node to district}
 node.to.add<-function(add.this.node){
   #district.temp
-  #Build the list of lists to add to adjacency list
+  #Build the list of lists to add to district list
   for (i in (length(adj.list)):1){
-    if(((as.numeric(adj.list[[i]][[1]]))==node.to.add)){
+    if((as.numeric(adj.list[[i]][[1]]))==as.numeric(add.this.node)){
       #building individual node list to bring into district list
+      
+      
       temp1<-list()
-      temp1[1]<-(as.numeric(adj.list[[i]][[1]]))
-      temp2<-list()
-      temp2[1]<-(as.numeric(adj.list[[i]][[2]]))
-      temp3<-1:length(adj.list[[i]][[3]])
-      for (j in 1:(length(adj.list[[i]][[3]]))){
-        temp3[j]<-adj.list[[i]][[3]][j]
-        }
-      temp4<-list()
-      temp4[1]<-(as.numeric(adj.list[[i]][[4]]))
-      templist<-list(temp1,temp2,temp3,temp4)
-      district.temp[[(length(district.temp)+1)]]<-templist #Add node to district
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[1]]))
+      
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[2]]))
+      temp1[[length(temp1)+1]]<-adj.list[[i]][[3]]
+      
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[4]]))
+      #templist<-list(temp1,temp2,temp3,temp4)
+      district.temp[[length(district.temp)+1]]<-temp1 #Add node to adjacency
+      temp.pop<=temp.pop+adj.list[[i]][[2]]#Add population, so district will stop growing when it needs to.
+      #Once the node is found and added, we can break the loop
+      #break
+      
+      # temp1<-list()
+      # temp1[1]<-(as.numeric(adj.list[[i]][[1]]))
+      # temp2<-list()
+      # temp2[1]<-(as.numeric(adj.list[[i]][[2]]))
+      # temp3<-1:length(adj.list[[i]][[3]])
+      # for (j in 1:(length(adj.list[[i]][[3]]))){
+      #   temp3[j]<-adj.list[[i]][[3]][j]
+      #   }
+      # temp4<-list()
+      # temp4[1]<-(as.numeric(adj.list[[i]][[4]]))
+      # templist<-list(temp1,temp2,temp3,temp4)
+      # district.temp[[(length(district.temp)+1)]]<-templist #Add node to district
       
     }
   }
@@ -221,12 +236,22 @@ This function will pick a new node for the proposed district by looking at the a
 ```{r pick node}
 pick.new.node<- function(temp.pop){
   node.number=-99
-  #Prioritize nodes with max adjacencies with the temp district
-  temp.max<-adj.list[which(unlist(lapply(adj.list,function(x) as.numeric(x[4])))==max(unlist(lapply(adj.list,function(x) as.numeric(x[4])))))]
-  for (i in 1:length(temp.max)){
-  #Check pop. if ok, return a value
-  ifelse((temp.pop+as.integer(adj.list[[i]][[2]])<Population_Range[2]), return(as.numeric(adj.list[[i]][[1]]),))
+  #Prioritize nodes with max adjacency with the temp district
+  temp.max<-0
+  for (i in 1:length(adj.list)){
+    if (adj.list[[i]][[4]]>=temp.max){
+      if((temp.pop+as.integer(adj.list[[i]][[2]]))>Population_Range[2]){break}
+      temp.max<-adj.list[[i]][[4]]
+      node.number<-adj.list[[i]][[1]]
+    }
   }
+  
+  #>
+  # temp.max<-adj.list[which(unlist(lapply(adj.list,function(x) as.numeric(x[4])))==max(unlist(lapply(adj.list,function(x) as.numeric(x[4])))))]
+  # for (i in 1:length(temp.max)){
+  # #Check pop. if ok, return a value
+  # ifelse((temp.pop+as.integer(adj.list[[i]][[2]])<Population_Range[2]), return(as.numeric(adj.list[[i]][[1]])))
+  # }
   return (node.number)
 }
 #GLOBALNODESLIST[which(unlist(lapply(GLOBALNODESLIST,function(x) #as.numeric(x[4])))==which.max(unlist(lapply(GLOBALNODESLIST,function(x) as.numeric(x[4])))))]
@@ -237,16 +262,21 @@ This function is given a list of the nodes that were adjacent to the node just a
 
 ```{r adj list update}
 adj.list.update<-function(list.of.new.adj.nodes){
-  for (i in 1:(length(list.of.new.adj.nodes))){ #loop through nodes to check
+  for (k in 1:(length(list.of.new.adj.nodes))){ #loop through nodes to check
     It.is.here<-0
-    for (j in 1: length(adj.list)){#for each node, check adj.list
-      if((as.numeric(list.of.new.adj.nodes[i]))==(as.numeric(adj.list[[j]][[1]]))){It.is.here=1}
+    for (i in 1: length(adj.list)){#for each node, check adj.list
+      if(as.numeric(list.of.new.adj.nodes[k])==(as.numeric(adj.list[[i]][[1]]))){
+        It.is.here=1
+        #Update count
+        adj.list[[i]][[4]]<-as.numeric(adj.list[[i]][[1]])+1
+      }
+     
     }
     if (It.is.here==0){ #add the new node in the adjacency list
-      add.node(list.of.new.adj.nodes[i])
+      add.node(as.numeric(list.of.new.adj.nodes[k]))
       }
     
-    #And remove all node from the exterior list
+    #And remove all traces of node from the exterior list
     exterior.node.removal(as.numeric(list.of.new.adj.nodes[i]))
   }
   
@@ -262,60 +292,59 @@ make.district<-function(){
   temp.pop=0
   #Re-Create this district node list.  It is a global variable, for ease of use between functions,
   #but needs to be set to empty for each 'run'
-  #district.temp<-list()
-  temp1<-list(list())
-  temp2<-list(list())
-  temp3<-list(list())
-  temp4<-list(list())
-  templist<-list(temp1,temp2,temp3,temp4)
-  district.temp[[(length(district.temp)+1)]]<-templist #Add node to district
-  #assign(district.temp, NA, envir = .GlobalEnv)
-  
   #Re-Create this district adjacency list.  It is a global variable, for ease of use between functions,
   #but needs to be set to empty for each 'run'
   
-  adj.list[[(length(adj.list)+1)]]<-templist
-  #assign(adj.list, NA, envir = .GlobalEnv)
+temp_list<-list()
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[length(temp_list)+1]<-c(0)
+district.temp<-list()
+district.temp[[(length(district.temp)+1)]]<-temp_list
+adj.list<-list()
+adj.list[[(length(adj.list)+1)]]<-temp_list
+  
+#Add node to district
   
   #Pick start Node, use very first valid node
   First.node<-1
-  for (k in 1:length(GLOBALNODESLIST)){
-    ifelse(is.na(GLOBALNODESLIST[[k]][[1]]),break,(First.node<-as.numeric(GLOBALNODESLIST[[k]][[1]])))
+  for (k in length(GLOBALNODESLIST):1){
+    if (!(is.na(GLOBALNODESLIST[[k]][[1]]))){
+      First.node<-as.numeric(GLOBALNODESLIST[[k]][[1]])
+      break}
+  
   }
   
-  #Move Node to this district Node List
+  #Move  First Node to this district Node List
     
-      #building individual node list to bring into adjacency list
-      temp1<-list()
-      temp1[1]<-(as.numeric(GLOBALNODESLIST[[First.node]][[1]]))
-      temp2<-list()
-      temp2[1]<-(as.numeric(GLOBALNODESLIST[[First.node]][[2]]))
-      temp3<-1:length(GLOBALNODESLIST[[First.node]][[3]])
-      for (j in 1:(length(GLOBALNODESLIST[[First.node]][[3]]))){
-        temp3[j]<-GLOBALNODESLIST[[First.node]][[3]][j]
-        }
-      temp4<-list()
-      temp4[1]<-(as.numeric(GLOBALNODESLIST[[First.node]][[4]]))
-      templist<-list(temp1,temp2,temp3,temp4)
-      district.temp<-templist #Add node to adjacency
+      
+  temp1<-list()
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[1]]))
+      
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[2]]))
+  temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[First.node]][[3]]
+      
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[4]]))
+      
+  district.temp[[1]]<-temp1 #Add node to district
   
   #Add nodes to Adjacency List 
-  temp3<-1:length(GLOBALNODESLIST[[First.node]][[3]])
-      for (j in 1:(length(GLOBALNODESLIST[[First.node]][[3]]))){
-        temp3[j]<-GLOBALNODESLIST[[First.node]][[3]][j]
-        }
-  First.adj<- temp3
+  
+  First.adj<-GLOBALNODESLIST[[First.node]][[3]]
+        
   adj.list.update(First.adj)
   
   #Remove from exterior list
   exterior.node.removal(First.node)
   
-  while (dist_pop<Population_Range[2]){
-    Next.node<-pick.new.node(adj.list,temp.pop)
-    ifelse((Next.node==-99),break,)
+  while (temp.pop<Population_Range[2]){
+    Next.node<-pick.new.node(temp.pop)
+    if(Next.node==-99){break}
     #Add node to district.temp, remove from adj.list
     node.to.add(Next.node)
     node.to.remove(Next.node)
+    
   }
   
 }
@@ -326,18 +355,21 @@ make.district<-function(){
 The created information here is the heart of the program.  It will create lists of nodes and drive functions that will create districts.
 
 ```{r Base Global Information}
-temp1<-list(list())
-temp2<-list(list())
-temp3<-list(list())
-temp4<-list(list())
-templist<-list(temp1,temp2,temp3,temp4)
-district.temp[[(length(district.temp)+1)]]<-templist
-#district.temp<-list()
-adj.list[[(length(adj.list)+1)]]<-templist
-for (j in 1:number_districts){
+#make some global variables
+temp_list<-list()
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[length(temp_list)+1]<-c(0)
+district.temp<-list()
+district.temp[[(length(district.temp)+1)]]<-temp_list
+adj.list<-list()
+temp.pop<-0
+adj.list[[(length(adj.list)+1)]]<-temp_list
+#for (j in 1:number_districts){
   make.district()
   final_district[j]<-district.temp
-}
+#}
 
 
 
