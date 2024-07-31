@@ -143,33 +143,25 @@ node.to.remove<-function(remove.this.node){
 }
 ```
 ## R function to add a single node to Adjacency List
-GLOBALNODELIST is the Global-level list that is a modifiable list of all the nodes that have not yet been used to build districts.  It shall be modified with a different function.
+GLOBALNODELIST is the Global-level list that is a modifiable list of all the nodes that have not yet been used to build districts.  It shall be modified with a different function. However, the indexing is the same as the node name at all times- any modification is just setting the node name to 'na' so that we can continue to use the list without excessive lookup times.
 
 This function shall copy the node from the exterior node list and place it in the adjacency list.  It shall return nothing, since adj.list is a global variable that is set to zero when each new district is created.
 
 ```{r function to add node}
 add.node<-function(new.adj.node){
-  #Build the list of lists to add to adjacency list, this is to check that the node given is in the GLOBALNODESLIST
-  for (i in (length(GLOBALNODESLIST)):1){
-    if(as.numeric(GLOBALNODESLIST[[i]][[1]])==as.numeric(new.adj.node)){
+  #building individual node list to bring into adjacency list
+  temp1<-list()
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[1]]))
       
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[2]]))
+  temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[new.adj.node]][[3]]
+  #Remember that these nodes are now connected to the district list, and should start with +1 adjacency.
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[4]])+1)
       
-      #building individual node list to bring into adjacency list
-      temp1<-list()
-      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[1]]))
-      (4177)
-      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[2]]))
-      temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[i]][[3]]
-      #Remember that these nodes are now connected to the district list, and should start with +1 adjacency.
-      temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[i]][[4]])+1)
-      
-      adj.list[[(length(adj.list)+1)]]<-temp1 #Add node to adjacency
-      #And remove all traces of node from the exterior list
-      exterior.node.removal(new.adj.node)
-    }
-  }
-  
-}
+  adj.list[[(length(adj.list)+1)]]<-temp1 #Add node to adjacency
+  #And remove the name of node from the exterior list
+  exterior.node.removal(new.adj.node)
+      }
 
 ```
 
@@ -180,13 +172,8 @@ Nothing is returned.
 
 ```{r new adj node removed from exterior/GLOBAL list}
 exterior.node.removal<-function(removed.node){
-  for (i in (length(GLOBALNODESLIST)):1){
-    if ((as.numeric(GLOBALNODESLIST[[i]][[1]]))==as.numeric(removed.node)){
-      GLOBALNODESLIST[[i]]<- NA #Remove node from global node
-      list.remove(GLOBALNODESLIST, c(i))
-      }
-  }
-  
+  #By leaving the Global list in place, except for the node #, we may minimize lookup time
+      GLOBALNODESLIST[[removed.node]][[1]]<- NA #Remove node from 
 }
 ```
 ## Function to add node to District list
@@ -247,38 +234,18 @@ adj.list.update<-function(list.new.adj.nodes){
     It.is.here<-0
     
     for (i in 1: length(adj.list)){#for each node, check adj.list
-      if(as.numeric(list.of.new.adj.nodes[k])==(as.numeric(adj.list[[i]][[1]]))){
+      if(as.numeric(list.new.adj.nodes[k])==(as.numeric(adj.list[[i]][[1]]))){
         It.is.here=1
         #Update count
         adj.list[[i]][[4]]<-as.numeric(adj.list[[i]][[1]])+1
       }
      
     }
-    if (It.is.here==0){ #add the new node in the adjacency list
-      add.node(as.numeric(list.of.new.adj.nodes[k]))
+    #Node can neither be present or na to be added.
+    if (It.is.here==0 && GLOBALNODESLIST[[list.new.adj.nodes[k]]]!=na){ #add the new node in the adjacency list
+      add.node(list.new.adj.nodes[k])
     }
   }
- 
-  
-  
-  # for (k in 1:(length(First.adj))){ #loop through nodes to check
-  #   It.is.here<-0
-  #   
-  #   for (i in 1: length(adj.list)){#for each node, check adj.list
-  #     print("check")
-  #     if(as.numeric(First.adj[k])==(as.numeric(adj.list[[i]][[1]]))){
-  #       It.is.here=1
-  #       #Update count
-  #       adj.list[[i]][[4]]<-as.numeric(adj.list[[i]][[1]])+1
-  #     }
-  #    
-  #   }
-  #   if (It.is.here==0){ #add the new node in the adjacency list
-  #     print("adding ")
-  #     print(First.adj[k])
-  #     add.node(First.adj[k])
-  #   }
-  # } 
   
 }
 ```
@@ -372,4 +339,12 @@ adj.list[[(length(adj.list)+1)]]<-temp_list
 
 
 
+```
+
+```{r test}
+p.number<-function(guess){
+  print(class(guess))
+}
+#exterior.node.removal(1)
+#p.number(3)
 ```
