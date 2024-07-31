@@ -123,24 +123,25 @@ node.to.remove<-function(remove.this.node){
   #First, the node must be removed from other node's adjacency lists.  We do not need to keep track of which nodes are adjacent to our district sub-graph, because all nodes in the adjacency list are connected to the district.
   #Second, while we are removing the node from the adjacent node's adjacency lists, we need to update the Number of Connections each exterior and adjacent node has to the district sub-graph.
   for (i in (length(adj.list)):1){
-    if(!is.na(adj.list[i])){
+    if(is.na(adj.list[i])){next}
     for (j in (length(adj.list[[i]][[3]])):1){
+      if (is.na(adj.list[[i]][[3]][j])){next}
       if (as.numeric(adj.list[[i]][[3]][j])==as.numeric(remove.this.node)){
         adj.list[[i]][[3]][j]<<- NA #
         adj.list[[i]][[4]][[1]]<<-1+as.numeric(adj.list[[i]][[4]][[1]])
       
       }
     }
-  }}
+  }
   #Lastly, remove this node from the adjacency list.  It is only listed once, so it will not cause problems with our iteration.
   for (i in (length(adj.list)):1){
-    if(!is.na(adj.list[i])){
+    if(!is.na(adj.list[i])){next}
     if((as.numeric(adj.list[[i]][[1]]))==as.numeric(remove.this.node)){
       
-      adj.list[[i]]<<-NA
+      adj.list[[i]][[1]]<<-NA
       #list.remove(adj.list, c(i))
     }
-  }}
+  }
   
 }
 ```
@@ -213,23 +214,24 @@ This function will pick a new node for the proposed district by looking at the a
 ```{r pick node}
 pick.new.node<- function(){
   node.number=-99
-  #Prioritize nodes with max adjacency with the temp district
-  #while (temp.pop<Population_Range[2]){
-  # temp.max<-0
-  # for (i in 1:length(adj.list)){
-  #   if (!is.na(adj.list[i])){
-  #   if (adj.list[[i]][[4]]>=temp.max && !is.na(adj.list[[i]][[4]])){
-  #     #if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){pass}
-  #     temp.max<-adj.list[[i]][[4]]
-  #     node.number<-adj.list[[i]][[1]]
-  #   }
-  # }
-  # }
+ #Prioritize nodes with max adjacency with the temp district
+  
+  temp.max<-0
+  for (i in 1:length(adj.list)){
+    if (!is.na(adj.list[i])){next}
+    if (adj.list[[i]][[4]]>=temp.max && !is.na(adj.list[[i]][[1]])){
+      if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){next}
+      temp.max<-adj.list[[i]][[4]]
+      node.number<-adj.list[[i]][[1]]
+    }
+  }
+  
    if (node.number==-99){#if max not found, use queue from list.
      for (i in length(adj.list):1){
      if (!is.na(adj.list[i])){
-       #if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){pass}
+       if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){pass}
        node.number<-adj.list[[i]][[1]]
+       break
          }
        }
    
@@ -317,9 +319,10 @@ adj.list[[(length(adj.list)+1)]]<<-temp_list
   
   #Remove from exterior list
   exterior.node.removal(First.node)
-  
+  run<-1
   while (temp.pop<Population_Range[1]+1000){
     Next.node<-pick.new.node()
+    paste("Node no. ",run," picked.")
     if(Next.node==-99){break}
     #Add node to district.temp, remove from adj.list
     node.to.add(Next.node)
@@ -336,7 +339,7 @@ The created information here is the heart of the program.  It will create lists 
 
 ```{r Base Global Information}
 #make some global variables
-final_district<-vector(mode="list", length = number_districts)
+tot.dist<<-vector(mode="list", length = number_districts)
 temp_list<-list()
 temp_list[[length(temp_list)+1]]<-c(0)
 temp_list[[length(temp_list)+1]]<-c(0)
@@ -349,23 +352,7 @@ temp.pop<-0
 adj.list[[length(adj.list)+1]]<-temp_list
 #for (j in 1:number_districts){
   make.district()
-  final_district[1]<<-district.temp
+  #tot.dist[[1]]<<-district.temp
 #}
 
-
-
-```
-
-```{r test}
-p.number<-function(guess){
-  print(class(guess))
-  y<<-7
-}
-
-```
-```{r test2}
-#exterior.node.removal(1)
-y<-3
-p.number("15")
-print(y)
 ```
