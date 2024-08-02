@@ -110,7 +110,8 @@ abline(lm(illinois_ratio_race~illinois_ratio_18), col='red')
 plot(illinois_ratio_18,IL_state_map$pop, xlab="Ratio of Democratic Voters", ylab="Total Population",main = "Voting History Ratio to Total Population per node")
 abline(lm(IL_state_map$pop~illinois_ratio_18), col='red')
 
-plot(Illinois_pop_density,illinois_ratio_18)
+plot(illinois_ratio_18,Illinois_pop_density, xlab="Ratio of Democratic Voters", ylab="Node Population Density",)
+#abline(lm(Illinois_pop_density$pop~illinois_ratio_18), col='red')
 ```
 
 
@@ -261,12 +262,28 @@ These are a few of the random districting plans made by the redist package.
 hist(plans_diversity(illinois_plans_2020), breaks=24)
 ```
 
-```{r post-run analysis-illinois}
+```{r post-run analysis-illinois 01}
+m_illinois_plans_2020 = illinois_plans_2020 %>%
+  mutate(Compactness = comp_polsby(pl(),IL_state_map),
+         Population_deviation= plan_parity(IL_state_map),
+         Democratic_voteSS=group_frac(IL_state_map,adv_18,(adv_18+arv_18)))
 
+hist(m_illinois_plans_2020,Population_deviation) + hist(m_illinois_plans_2020,Compactness)#+
+  #plot_layout(guides="collect")+
+  #plot_annototion(title="Simulated plan charachteristics")
+```
+```{r post-run analysis-illinois 02}
+redist.plot.scatter(m_illinois_plans_2020, Population_deviation,Compactness)+
+  labs(title="Population deviation and compactness by plan")
+```
+```{r post-run analysis-illinois 03}
+plot(m_illinois_plans_2020,Democratic_vote,size=0.5,color_thresh=0.5)+
+  scale_color_manual(values=c("black","tomato2","dodgerblue"))+
+  labs(title="Democratic vote share by district")
 ```
 
 
-Texas saved diagnositic information, just for tuning purposes.
+Texas saved diagnostic information, just for tuning purposes.
 
 With 2000 samples:
 
