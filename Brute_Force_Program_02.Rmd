@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #Packages to install,commented out is default.
 
 #install.packages("dplyr")
-#install.packages("gglot2")
+#install.packages("ggplot2")
 #install.packages("redist")
 #install.packages("Rtools")
 #install.packages("alarmdata")
@@ -51,10 +51,10 @@ These are the constraints that are global:
 ```{r Base Global Information}
 #Selecting state and entering base information
 #This_State<-read.csv(file='ks_2020_vtd.txt')
-This_state_map<-alarm_50state_map('KS')
+This_state_map<-alarm_50state_map('IL')
 
 #Code in number of Districts
-number_districts<- 4 #Hard-coded number of Congressional Districts, the minimum is two.
+number_districts<- 17 #Hard-coded number of Congressional Districts, the minimum is two.
 
 #Total Population
 tot_pop<-sum(This_state_map$pop)
@@ -376,3 +376,87 @@ for (j in 1:number_districts){
 }
 
 ```
+
+
+## Matching my numbers up to GEOID and creating a district map.
+
+This section will take the tot.district list and assign districts to each GEOID on the original This_state_map.  We will do this by making a list that is total nodes long, assigning each index space to it's district #. (All node numbers in district 1 list shall be assigned a 1)  This list will then be appended to This_state_map.  Then we can compare our districts to the redist results.  
+
+```{r assign to original map object}
+brute_district<-replicate(length(This_state_map$pop),as.integer(number_districts))
+for (j in 1:length(tot.dist)){
+  for (i in 1:length(tot.dist[[j]])){
+    brute_district[as.numeric(tot.dist[[j]][[i]][[1]])]<-as.integer(j)
+  }
+}
+#Because the redist object won't let us analyze new columns of districting, we will modify the cd_2020 district.
+for (k in 1:length(This_state_map$pop)){
+  This_state_map$cd_2020[[k]]<-as.integer(brute_district[k])
+  
+}
+
+```
+
+Now, we run the redist functions to make our group of comparison maps
+
+ 
+```{r redist maps-this map}
+#This
+This_plans<-redist_smc(This_state_map,1000,compactness = 1,runs = 2 )
+print(This_plans)
+
+```
+Here is a map comparing some of the redist maps
+```{r sample plots-this plan}
+redist.plot.plans(This_plans, draws=c("cd_2020","1","2","30","20","66"), shp=This_state_map)
+```
+
+```{r 2020 comparison - this}
+#Matching district numbers
+
+This_plans_today<-match_numbers(This_plans,This_state_map$cd_2020)
+
+this_county_perims2020<- prep_perims(This_state_map, This_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+This_plans_today = This_plans_today %>%
+  mutate(pop_dev = abs(total_pop / get_target(This_state_map)-1),
+         comp=comp_polsby(pl(), This_state_map,perim_df = this_county_perims2020),
+         pct_min = group_frac(This_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(This_state_map,adv_18,adv_18+arv_18))
+
+print(This_plans_today)
+
+```
+
+```{r Diagnostics-this}
+summary(This_plans_today)
+
+```
+
+
+```{r post-run analysis-this 01}
+m_This_plans_today = This_plans_today %>%
+  mutate(Compactness = comp_polsby(pl(),This_state_map),
+         Population_deviation= plan_parity(This_state_map),
+         Democratic_vote =group_frac(This_state_map,adv_18,(adv_18+arv_18)))
+
+hist(m_This_plans_today,Population_deviation) + hist(m_This_plans_today,Compactness)#+
+  #plot_layout(guides="collect")+
+  #plot_annototion(title="Simulated plan charachteristics")
+```
+
+```{r post-run analysis-this 02}
+redist.plot.scatter(m_This_plans_today, Population_deviation,Compactness)+
+  labs(title="Population deviation and compactness by plan")
+```
+
+```{r post-run analysis-this 03}
+plot(m_This_plans_today,Democratic_vote,size=0.5,color_thresh=0.5)+
+  scale_color_manual(values=c("black","tomato2","dodgerblue"))+
+  labs(title="Democratic vote share by district")
+```
+
+
+
