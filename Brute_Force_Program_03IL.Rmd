@@ -1,0 +1,481 @@
+---
+title: "Main Program for Final Project"
+author: "Rebecca Thomson"
+date: "2024-07-16"
+output: html_document
+---
+This is the main program for analyzing District Maps.  
+'Input_Analysis.Rmd' will analyze and check input data.
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Packages to install,commented out is default.
+
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("redist")
+#install.packages("Rtools")
+#install.packages("alarmdata")
+#install.packages('ggredist')
+
+```
+
+## Libraries
+
+These are all the libraries used for the project.  We have tried to comment which part they were first called for use.
+
+```{r Libraries}
+library(tidyverse)
+#library(Rtools)
+library(redist) #Map Analysis
+library(dplyr)
+library(ggplot2)
+library(alarmdata) #State graph/mapping data
+library(ggredist) #Alarm data mapping
+library(rlist)
+```
+
+## Global Provided Information and Constraints
+The global information and constraints are not changed during any algorithm or analysis, except addition of proposed Congressional Districts when the creation algorithm is completed.
+This information will be modified for each state analyzed.
+
+These are the variables that are global: 
+-Loading initial state information (selecting which state to analyze)
+-The list of Final District node choices.  It is a list of lists of what nodes are in created districts, it shall be modified by our analysis and starts out empty.
+
+These are the constraints that are global:
+-Required number of Districts
+-The range of population values allowed in each district.  Historically, this is plus or minus 1% of the Total Population/Number of Districts.
+
+
+```{r Base Global Information}
+#Selecting state and entering base information
+#This_State<-read.csv(file='ks_2020_vtd.txt')
+This_state_map<-alarm_50state_map('IL')
+
+#Code in number of Districts
+number_districts<- 17 #Hard-coded number of Congressional Districts, the minimum is two.
+
+#Total Population
+tot_pop<-sum(This_state_map$pop)
+
+Population_Range<-c((tot_pop/number_districts)-0.01*(tot_pop/number_districts), (tot_pop/number_districts)+0.01*(tot_pop/number_districts) )
+
+```
+
+## Create list of Nodes Function
+
+This function produces an original list of all nodes.  It is a list of lists, where each list is: 
+[
+[(original node index(integer), repeated n times [],[],[]...],                 
+[raw population number of node(integer)],
+[list of adjacent nodes by original index number[],[],[]....],
+[0 (for later tracking in other functions, integer)]
+]
+
+The purpose of this function is to:
+-Protect the original data from loss or corruption.
+-Isolate each node into its own list for ease of analysis.  This will make creating lists of nodes within districts and lists of adjacent nodes easier.
+-The repeated naming of the node in [[1]] is because nodes need to be removed from the previous district's adjacency list when a new district is made.
+```{r All Nodes Original List}
+create_node_list<-function(){
+all_nodes_adjlist<- This_state_map$adj
+all_nodes_poplist<-This_state_map$pop
+all_nodes_index<-1:(length(This_state_map$pop))
+all_nodes_all_list<-list()
+for (i in 1:(length(all_nodes_poplist))){
+  temp_list<-list()
+  temp_name<-1:number_districts
+  for (k in 1:number_districts){temp_name[k]<-all_nodes_index[[i]]}
+  temp_list[[length(temp_list)+1]]<-temp_name
+  temp_list[[length(temp_list)+1]]<-all_nodes_poplist[i]
+  check_adj<-all_nodes_adjlist[[i]]
+  for (j in length(check_adj):1){
+    if (as.numeric(check_adj[j])==as.numeric(all_nodes_index[[i]])){
+      check_adj[j]<-NA
+    }
+  }
+  temp_list[[length(temp_list)+1]]<-check_adj
+  
+  temp_list[length(temp_list)+1]<-c(0)
+  
+  all_nodes_all_list[[length(all_nodes_all_list)+1]]<-temp_list
+
+}
+return (all_nodes_all_list)
+}
+
+```
+## Created Global Information
+
+```{r create Global}
+#Iterate-able list of all nodes.
+GLOBALNODESLIST<-create_node_list()
+
+```
+
+## R function to Remove a node from the Adjacency list
+This function takes the node to be removed from the adj.list.  The function should be used when a node is added to the district being built. 
+The function removes the node from the adjacency list, removes any mention of the node in other nodes' lists, and increases the count of adjacencies within those node's adjacency lists- because now the district has one more adjacency.
+
+```{r function to remove node }
+
+node.to.remove<-function(remove.this.node){
+  
+  #First, the node must be removed from other node's adjacency lists.  We do not need to keep track of which nodes are adjacent to our district sub-graph, because all nodes in the adjacency list are connected to the district.
+  #Second, while we are removing the node from the adjacent node's adjacency lists, we need to update the Number of Connections each exterior and adjacent node has to the district sub-graph.
+  
+  for (i in (length(adj.list)):1){
+    if(is.na(adj.list[i])){next}
+    for (j in (length(adj.list[[i]][[3]])):1){
+      if (is.na(adj.list[[i]][[3]][j])){next}
+      if (as.numeric(adj.list[[i]][[3]][j])==as.numeric(remove.this.node)){
+        adj.list[[i]][[3]][j]<<- NA #
+        adj.list[[i]][[4]][[1]]<<-1+as.numeric(adj.list[[i]][[4]][[1]])
+      
+      }
+    }
+  }
+ 
+}
+```
+## R function to add a single node to Adjacency List
+GLOBALNODELIST is the Global-level list that is a modifiable list of all the nodes that have not yet been used to build districts.  It shall be modified with a different function. However, the indexing is the same as the node name at all times- any modification is just setting the node name to 'na' so that we can continue to use the list without excessive lookup times.
+
+This function shall copy the node from the exterior node list and place it in the adjacency list.  It shall return nothing, since adj.list is a global variable that is set to zero when each new district is created.
+
+```{r function to add node}
+add.node<-function(new.adj.node){
+  #building individual node list to bring into adjacency list.  Need to check that node has not been placed in another district.
+  if (!is.na(GLOBALNODESLIST[[new.adj.node]][[1]][[m]])){
+  temp1<-list()
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[1]][[m]]))
+      
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[2]]))
+  temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[new.adj.node]][[3]]
+  #I have found that there are errors in the input data, that cause 'loops' of the same node being added over and over.  This should remove any node that is listed as adjacent to itself in its adjacency list
+  for (j in length(temp1[[3]]):1){
+    if (is.na(temp1[[3]][j])){next}
+    if (temp1[[3]][j]==as.numeric(new.adj.node)){
+        temp1[[3]][j]<<- NA }}
+  #Remember that these nodes are now connected to the district list, and should start with +1 adjacency.
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[new.adj.node]][[4]])+1)
+      
+  adj.list[[(length(adj.list)+1)]]<<-temp1 #Add node to adjacency
+  #And remove the name of node from the exterior list, this run only
+  exterior.node.removal(new.adj.node)
+      }}
+
+```
+
+#Function to remove node from possible exterior nodes list.
+When a node is selected for the adjacency list, run this code to remove the node from the exterior node list.  It does not remove this node from the list for the next run.
+The exterior node list is GLOBALNODESLIST, and it is a Global variable.
+Nothing is returned.
+
+```{r new adj node removed from exterior/GLOBAL list}
+exterior.node.removal<-function(removed.node){
+  #By leaving the Global list in place, except for the node #, we may minimize lookup time.
+      GLOBALNODESLIST[[removed.node]][[1]][[m]]<<- NA #Remove node from 
+}
+```
+## Function to add node to District list
+This function shall take in the node to be added.  It shall add the node to the district list.
+The district.temp list is a global variable'.
+```{r add new node to district}
+node.to.add<-function(add.this.node){
+  #district.temp
+  #Build the list of lists to add to district list
+  for (i in (length(adj.list)):1){
+    if(as.numeric(adj.list[[i]][[1]])!=0 && !is.na(adj.list[[i]][[1]])){
+    if(as.numeric(adj.list[[i]][[1]])==(as.numeric(add.this.node))){
+      #building individual node list to bring into district list
+      
+      
+      temp1<-list()
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[1]]))
+      
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[2]]))
+      temp1[[length(temp1)+1]]<-adj.list[[i]][[3]]
+      #Send new nodes to adj. list to be added
+      adj.list.update(adj.list[[i]][[3]])
+      
+      temp1[[length(temp1)+1]]<-(as.numeric(adj.list[[i]][[4]]))
+      
+      district.temp[[length(district.temp)+1]]<<-temp1 #Add node to district
+      temp.pop<<-temp.pop+adj.list[[i]][[2]]#Add population, so district will stop growing 
+      
+      
+      #Remove from adjacency list
+      adj.list[[i]][[1]]<<-NA
+      
+    }}
+  }
+  node.to.remove(add.this.node)
+  #Remove from exterior list in all cases
+  for (x in m:number_districts){
+  GLOBALNODESLIST[[add.this.node]][[1]][[x]]<<-NA}
+}
+```
+
+## Function to pick a new node
+This function will pick a new node for the proposed district by looking at the adjacency list and picking the node with the largest percentage of adjacencies to the proposed district. In the case of a tie, it will use the queue structure inherit in the adjacency list.
+
+```{r pick node}
+pick.new.node<- function(){
+  node.number=-99
+ #Prioritize nodes with max adjacency with the temp district
+  
+  temp.max<-0
+  #First, we will grab any node that has 100% of it's adjacency nodes already removed.
+  for (i in 1:length(adj.list)){
+    #No zeros or NA nodes
+    if (is.na(adj.list[[i]][[1]])||as.numeric(adj.list[[i]][[1]]==0)){next}
+    temp.length<-length(adj.list[[i]][[3]])  
+    temp.nacount<-sum(is.na(adj.list[[i]][[3]]))
+    #If 75% or more of the adjacency to this node is all ready picked, pick this node first OR it only has three or more nodes it is connected to at 50% OR 1 nodes only
+    if((temp.nacount/temp.length)>=0.75||(length(adj.list[[i]][[3]])<=3 && (temp.nacount/temp.length)>=0.5)||length(adj.list[[i]][[3]])==1){
+      node.number<-adj.list[[i]][[1]]
+      
+      break
+    }
+    }
+  #If the above is not met, we will continue to analyze nodes
+  for (i in 1:length(adj.list)){
+    #No zeros or NA nodes
+    if (is.na(adj.list[[i]][[1]])||as.numeric(adj.list[[i]][[1]]==0)||node.number!=-99){next}
+    temp.length<-length(adj.list[[i]][[3]])  
+    temp.nacount<-sum(is.na(adj.list[[i]][[3]]))
+    
+    #Pick the node that is the most connected already.
+    if (adj.list[[i]][[4]]>=temp.max && !is.na(adj.list[[i]][[1]])){
+      if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){next}
+      temp.max<-adj.list[[i]][[4]]
+      node.number<-adj.list[[i]][[1]]
+    }
+  }
+  
+   if (node.number==-99){#if max not found, use queue from list.
+     for (i in length(adj.list):1){
+       #No zeros or NA nodes
+       if (is.na(adj.list[[i]][[1]])||as.numeric(adj.list[[i]][[1]]==0)){next}
+       if (!is.na(adj.list[[i]][[1]])){
+       if(temp.pop+as.integer(adj.list[[i]][[2]])>Population_Range[2]){pass}
+       node.number<-adj.list[[i]][[1]]
+       break
+         }
+       }
+   
+  }
+  return (node.number)
+  }
+  
+
+```
+
+## Function to update the Adjacency List when node add to district
+This function is given a list of the nodes that were adjacent to the node just added to the district.  It will check if these nodes are within the adj.list, and if not, will add them.  
+
+```{r adj list update}
+adj.list.update<-function(list.new.adj.nodes){
+  for (k in 1:(length(list.new.adj.nodes))){ #loop through nodes to check
+    if (is.na(list.new.adj.nodes[k])){next}
+    It.is.here<-0
+    
+    for (i in 1: length(adj.list)){#for each node, check adj.list
+      if(is.na(adj.list[[i]][[1]])){next}
+      if(as.numeric(list.new.adj.nodes[k])==as.numeric(adj.list[[i]][[1]])){
+        It.is.here=1
+        #Update count
+        adj.list[[i]][[4]][[1]]<<-as.numeric(adj.list[[i]][[4]][[1]])+1
+        next
+      }
+     
+    }
+    #Node can neither be present or na in Global list to be added.
+    if (It.is.here==0 && !is.na(GLOBALNODESLIST[[list.new.adj.nodes[k]]][[1]][[m]])){ #add the new node in the adjacency list
+      add.node(list.new.adj.nodes[k])
+    }
+  }
+  
+}
+```
+
+## Creating a single District
+
+```{r make district}
+
+make.district<-function(){
+  temp.pop<<-0
+  #Re-Create this district node list.  It is a global variable, for ease of use between functions,
+  #but needs to be set to empty for each 'run'
+  #Re-Create this district adjacency list.  It is a global variable, for ease of use between functions,
+  #but needs to be set to empty for each 'run'
+  
+temp_list<-list()
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[length(temp_list)+1]<-c(0)
+district.temp<<-list()
+district.temp[[(length(district.temp)+1)]]<<-temp_list
+adj.list<<-list()
+adj.list[[(length(adj.list)+1)]]<<-temp_list
+  
+#Add node to district
+  
+  #Pick start Node, use very first valid node
+  First.node<-1
+  for (k in length(GLOBALNODESLIST):1){
+    if (!is.na(GLOBALNODESLIST[[k]][[1]][[m]])){
+      First.node<-as.numeric(GLOBALNODESLIST[[k]][[1]][[m]])
+      break}
+  
+  }
+  
+  #Move  First Node to this district Node List
+    
+      
+  temp1<-list()
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[1]][[m]]))
+      
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[2]]))
+  temp1[[length(temp1)+1]]<-GLOBALNODESLIST[[First.node]][[3]]
+      
+  temp1[[length(temp1)+1]]<-(as.numeric(GLOBALNODESLIST[[First.node]][[4]]))
+      
+  district.temp[[1]]<<-temp1 #Add node to district
+  
+  #Add nodes to Adjacency List 
+  
+  First.adj<<-GLOBALNODESLIST[[First.node]][[3]]
+        
+  adj.list.update(First.adj)
+  
+  #Remove from exterior list in all cases
+  for (x in m:number_districts){
+  GLOBALNODESLIST[[First.node]][[1]][[x]]<<-NA}
+  
+  while (temp.pop<Population_Range[1]+1000){
+    Next.node<-pick.new.node()
+    #print(paste("Node no. ",Next.node," picked."))
+    if(Next.node==-99){break}
+    #Add node to district.temp, remove from adj.list
+    node.to.add(Next.node)
+    
+  }
+  #Add district.temp to overall list.
+  tot.dist[[length(tot.dist)+1]]<<-district.temp
+}
+```
+
+
+## "Global Created Information ("Main")
+The created information here is the heart of the program.  It will create lists of nodes and drive functions that will create districts.
+
+```{r Base Global Information02}
+#make some global variables
+tot.dist<-list()
+temp_list<-list()
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[[length(temp_list)+1]]<-c(0)
+temp_list[length(temp_list)+1]<-c(0)
+district.temp<-list()
+district.temp[[length(district.temp)+1]]<-temp_list
+adj.list<-list()
+temp.pop<-0
+adj.list[[length(adj.list)+1]]<-temp_list
+m<-1
+pop.per.district<-1:number_districts
+for (j in 1:number_districts){
+  m<-j
+  make.district()
+  pop.per.district[j]<-temp.pop
+}
+
+```
+
+
+## Matching my numbers up to GEOID and creating a district map.
+
+This section will take the tot.district list and assign districts to each GEOID on the original This_state_map.  We will do this by making a list that is total nodes long, assigning each index space to it's district #. (All node numbers in district 1 list shall be assigned a 1)  This list will then be appended to This_state_map.  Then we can compare our districts to the redist results.  
+
+```{r assign to original map object}
+brute_district<-replicate(length(This_state_map$pop),as.integer(number_districts))
+for (j in 1:length(tot.dist)){
+  for (i in 1:length(tot.dist[[j]])){
+    brute_district[as.numeric(tot.dist[[j]][[i]][[1]])]<-as.integer(j)
+  }
+}
+#Because the redist object won't let us analyze new columns of distracting without extensive data-type manipulating, we will simply modify the cd_2020 district.
+for (k in 1:length(This_state_map$pop)){
+  This_state_map$cd_2020[[k]]<-as.integer(brute_district[k])
+  
+}
+
+```
+
+Now, we run the redist functions to make our group of comparison maps
+
+ 
+```{r redist maps-this map}
+#This
+This_plans<-redist_smc(This_state_map,1000,compactness = 1,runs = 2 )
+print(This_plans)
+
+```
+Here is a map comparing some of the redist maps
+```{r sample plots-this plan}
+redist.plot.plans(This_plans, draws=c("cd_2020","1","2","30","20","66"), shp=This_state_map)
+```
+
+```{r 2020 comparison - this}
+#Matching district numbers
+
+This_plans_today<-match_numbers(This_plans,This_state_map$cd_2020)
+
+this_county_perims2020<- prep_perims(This_state_map, This_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+This_plans_today = This_plans_today %>%
+  mutate(pop_dev = abs(total_pop / get_target(This_state_map)-1),
+         comp=comp_polsby(pl(), This_state_map,perim_df = this_county_perims2020),
+         pct_min = group_frac(This_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(This_state_map,adv_18,adv_18+arv_18))
+
+print(This_plans_today)
+
+```
+
+```{r Diagnostics-this}
+summary(This_plans_today)
+
+```
+
+
+```{r post-run analysis-this 01}
+m_This_plans_today = This_plans_today %>%
+  mutate(Compactness = comp_polsby(pl(),This_state_map),
+         Population_deviation= plan_parity(This_state_map),
+         Democratic_vote =group_frac(This_state_map,adv_18,(adv_18+arv_18)))
+
+hist(m_This_plans_today,Population_deviation) + hist(m_This_plans_today,Compactness)#+
+  #plot_layout(guides="collect")+
+  #plot_annototion(title="Simulated plan charachteristics")
+```
+
+```{r post-run analysis-this 02}
+redist.plot.scatter(m_This_plans_today, Population_deviation,Compactness)+
+  labs(title="Population deviation and compactness by plan")
+```
+
+```{r post-run analysis-this 03}
+plot(m_This_plans_today,Democratic_vote,size=0.5,color_thresh=0.5)+
+  scale_color_manual(values=c("black","tomato2","dodgerblue"))+
+  labs(title="Democratic vote share by district")
+```
+
+
+

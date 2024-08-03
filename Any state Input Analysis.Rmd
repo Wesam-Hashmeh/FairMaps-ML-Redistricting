@@ -1,0 +1,71 @@
+---
+title: "Any State Analysis"
+author: "Rebecca Thomson"
+date: "2024-07-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+#library(Rtools)
+library(redist) #Map Analysis
+library(dplyr)
+library(ggplot2)
+library(alarmdata) #State graph/mapping data
+library(ggredist) #Alarm data mapping
+```
+
+## Pick your state
+Here, I have picked:
+
+Indiana
+```{r pick}
+ANY_state_map<-alarm_50state_map('IN')
+```
+
+## run redist
+
+```{r run redist}
+ANY_plans<-redist_smc(ANY_state_map,500,compactness = 1,runs = 2 )
+print(ANY_plans)
+
+```
+
+
+```{r match}
+ANY_plans_2020<-match_numbers(ANY_plans,ANY_state_map$cd_2020)
+
+ANY_county_perims2020<- prep_perims(ANY_state_map, ANY_state_map$adj)
+
+#we will be analyze the population deviation, the perimeter-based compactness measure, and the fraction of minority voters and two-party Democratic vote share by district.
+
+ANY_plans_2020 = ANY_plans_2020 %>%
+  mutate(pop_dev = abs(total_pop / get_target(ANY_state_map)-1),
+         comp=comp_polsby(pl(), ANY_state_map,perim_df = ANY_county_perims2020),
+         pct_min = group_frac(ANY_state_map, vap-vap_white,vap),
+         pct_dem= group_frac(ANY_state_map,adv_18,adv_18+arv_18))
+
+print(ANY_plans_2020)
+
+```
+
+```{r diagnostics}
+summary(ANY_plans_2020)
+```
+```{r post-run analysis-any 01}
+ANY_plans_2020 = ANY_plans_2020 %>%
+  mutate(Compactness = comp_polsby(pl(),ANY_state_map),
+         Population_deviation= plan_parity(ANY_state_map),
+         Democratic_vote=group_frac(ANY_state_map,adv_18,(adv_18+arv_18)))
+
+hist(ANY_plans_2020,Population_deviation) + hist(ANY_plans_2020,Compactness)#+
+  #plot_layout(guides="collect")+
+#  plot_annotation(title="Simulated plan charachteristics")
+```
+
+```{r post-run analysis-anyS 03}
+plot(ANY_plans_2020,Democratic_vote,size=0.5,color_thresh=0.5)+
+  scale_color_manual(values=c("black","tomato2","dodgerblue"))+
+  labs(title="Democratic vote share by district")
+```
