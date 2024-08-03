@@ -1,0 +1,59 @@
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(spdep)
+library(ggdendro)
+
+# Load the Iowa data
+data(iowa)
+iowa_data <- iowa
+
+# Convert to sf object if not already
+if (!inherits(iowa_data, "sf")) {
+  iowa_data <- st_as_sf(iowa_data, wkt = "geometry")
+}
+
+# Extract the population data as a data frame without geometry
+features <- data.frame(pop = iowa_data$pop)
+
+# Function to calculate population penalty
+calculate_population_penalty <- function(iowa_data, target_population) {
+  population_per_cluster <- iowa_data %>% group_by(cluster) %>% summarise(pop = sum(pop))
+  population_penalty <- sum(abs(population_per_cluster$pop - target_population))
+  return(population_penalty)
+}
+
+# Define the number of clusters and target population
+num_clusters <- 4
+total_population <- sum(iowa_data$pop)
+target_population_per_cluster <- total_population / num_clusters
+
+# Perform hierarchical clustering using Ward's method
+hc <- hclust(dist(features), method = "ward.D2")
+
+# Plot the dendrogram
+dend <- as.dendrogram(hc)
+ggdendrogram(dend, rotate = TRUE) + ggtitle("Dendrogram of Iowa Districts")
+
+# Cut the dendrogram to form 4 clusters
+iowa_data$cluster <- cutree(hc, k = num_clusters)
+
+# Calculate total penalty for the current configuration
+total_penalty <- calculate_population_penalty(iowa_data, target_population_per_cluster)
+
+# Print the population distribution and the total penalty
+population_per_cluster <- iowa_data %>% group_by(cluster) %>% summarise(pop = sum(pop))
+print(population_per_cluster)
+print(paste("Total Population Penalty: ", total_penalty))
+
+# Plot the clusters
+ggplot(data = iowa_data) +
+  geom_sf(aes(fill = as.factor(cluster)), color = "white") +
+  scale_fill_viridis_d() +
+  theme_minimal() +
+  labs(title = "Hierarchical Clustering of Iowa Districts", fill = "Cluster") +
+  theme(axis.title = element_blank(), axis.text = element_blank())
+
+# Save the plot if needed
+ggsave("hierarchical_clustering_iowa.png", width = 10, height = 8)

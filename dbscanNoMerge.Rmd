@@ -1,0 +1,111 @@
+# Load necessary libraries
+library(dbscan)
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+
+# Load the Iowa dataset
+data(iowa)
+iowa_data <- iowa
+
+# Ensure the data is in sf format
+if (!inherits(iowa_data, "sf")) {
+  iowa_data <- st_as_sf(iowa_data, wkt = "geometry")
+}
+
+# Extract the population data as a data frame without geometry
+features <- data.frame(pop = iowa_data$pop)
+
+# Set DBSCAN parameters
+epsilon <- 1 
+minPts <- 5 
+
+# Run DBSCAN
+dbscan_result <- dbscan(features, eps = epsilon, minPts = minPts)
+
+# Assign clusters to the original data
+iowa_data$cluster <- dbscan_result$cluster
+
+# Define target population per cluster
+total_population <- sum(iowa_data$pop)
+num_clusters <- length(unique(dbscan_result$cluster))
+target_population <- total_population / num_clusters
+
+# Define penalty weights
+alpha <- 1 # Population penalty weight
+beta <- 1 # Spatial penalty weight
+
+# Calculate penalties
+calculate_penalty <- function(data, target_population) {
+  # Calculate population penalty
+  population_penalty <- data %>%
+    group_by(cluster) %>%
+    summarise(total_pop = sum(pop)) %>%
+    mutate(pop_diff = abs(total_pop - target_population)) %>%
+    summarise(pop_penalty = sum(pop_diff)) %>%
+    pull(pop_penalty)
+  
+  # Calculate spatial penalty (using adjacency matrix)
+  spatial_penalty <- 0
+  clusters <- unique(data$cluster)
+  for (cluster in clusters) {
+    cluster_data <- data %>% filter(cluster == !!cluster)
+    adj_matrix <- st_intersects(cluster_data, sparse = FALSE)
+    # Check if all nodes in the cluster are contiguous
+    for (i in 1:nrow(adj_matrix)) {
+      if (sum(adj_matrix[i, ]) == 0) {
+        spatial_penalty <- spatial_penalty + 1
+      }
+    }
+  }
+  
+  # Total penalty
+  total_penalty <- alpha * population_penalty + beta * spatial_penalty
+  return(total_penalty)
+}
+
+# Initial penalty
+initial_penalty <- calculate_penalty(iowa_data, target_population)
+
+# Function to optimize clustering
+optimize_clustering <- function(features, data, epsilon, minPts, target_population, alpha, beta) {
+  best_penalty <- Inf
+  best_clusters <- NULL
+  
+  for (i in 1:100) { # Run multiple simulations
+    dbscan_result <- dbscan(features, eps = epsilon, minPts = minPts)
+    data$cluster <- dbscan_result$cluster
+    penalty <- calculate_penalty(data, target_population)
+    
+    if (penalty < best_penalty) {
+      best_penalty <- penalty
+      best_clusters <- dbscan_result$cluster
+    }
+  }
+  
+  return(best_clusters)
+}
+
+# Optimize clustering
+best_clusters <- optimize_clustering(features, iowa_data, epsilon, minPts, target_population, alpha, beta)
+iowa_data$cluster <- best_clusters
+
+# Summarize population by cluster
+cluster_populations <- iowa_data %>%
+  group_by(cluster) %>%
+  summarise(total_population = sum(pop))
+
+# Print the population in each cluster
+print(cluster_populations)
+
+# Plot the clustered data
+ggplot(data = iowa_data) +
+  geom_sf(aes(fill = as.factor(cluster)), color = "white") +  # Plot districts with clusters
+  scale_fill_viridis_d() +  # Color scale for clusters
+  theme_minimal() +  # Use a minimal theme for the plot
+  labs(title = "Clustered Districts in Iowa", fill = "Cluster") +  # Add labels and title
+  theme(axis.title = element_blank(), axis.text = element_blank())  # Remove axis titles and text
+
+# Save the plot
+ggsave("clustered_districts_iowa_dbscan.png", width = 10, height = 8)

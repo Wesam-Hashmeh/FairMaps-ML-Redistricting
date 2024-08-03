@@ -1,0 +1,133 @@
+# Load libraries
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(spdep)
+library(redist)
+library(alarmdata)
+
+# Load the Iowa data
+data(iowa)
+iowa_data <- iowa
+
+# Convert to sf object if not already
+if (!inherits(iowa_data, "sf")) {
+  iowa_data <- st_as_sf(iowa_data, wkt = "geometry")
+}
+
+# Create a spatial adjacency matrix
+neighbors <- poly2nb(iowa_data)
+adjacency_matrix <- nb2mat(neighbors, style = "B")
+
+n_districts <- 4
+features <- data.frame(pop = iowa_data$pop)
+
+# Perform initial clustering using K-Means
+set.seed(42)
+initial_clusters <- kmeans(features, centers = n_districts, nstart = 25)
+
+# Add cluster assignments to the dataset
+iowa_data$cluster <- as.factor(initial_clusters$cluster)
+
+
+total_population <- sum(features$pop)
+target_population_per_cluster <- total_population / n_districts
+
+# Function to calculate the penalty for population imbalance
+calculate_population_penalty <- function(data, target_population) {
+  population_per_cluster <- data %>%
+    group_by(cluster) %>%
+    summarise(pop = sum(pop))
+  penalty <- sum(abs(population_per_cluster$pop - target_population))
+  return(penalty)
+}
+
+# Function to calculate the spatial penalty
+calculate_spatial_penalty <- function(adjacency_matrix, clusters) {
+  penalty <- 0
+  for (i in 1:nrow(adjacency_matrix)) {
+    for (j in 1:ncol(adjacency_matrix)) {
+      if (adjacency_matrix[i, j] > 0 && clusters[i] != clusters[j]) {
+        penalty <- penalty + adjacency_matrix[i, j]^2
+      }
+    }
+  }
+  return(penalty)
+}
+
+# Function to perform the optimization
+optimize_clusters <- function(initial_clusters, adjacency_matrix, n_districts, target_population_per_cluster, pop_weight, spatial_weight, max_iter = 100) {
+  best_clusters <- initial_clusters$cluster
+  best_penalty <- Inf
+  
+  for (i in 1:max_iter) {  # Number of iterations
+    # Shuffle cluster assignments
+    shuffled_clusters <- sample(initial_clusters$cluster)
+    
+    # Calculate penalties
+    iowa_data$cluster <- as.factor(shuffled_clusters)
+    pop_penalty <- calculate_population_penalty(iowa_data, target_population_per_cluster)
+    spatial_penalty <- calculate_spatial_penalty(adjacency_matrix, shuffled_clusters)
+    total_penalty <- pop_weight * pop_penalty + spatial_weight * spatial_penalty
+    
+    # Update best clusters if the penalty improves
+    if (total_penalty < best_penalty) {
+      best_penalty <- total_penalty
+      best_clusters <- shuffled_clusters
+    }
+  }
+  
+  return(list(clusters = best_clusters, penalty = best_penalty))
+}
+
+# Define grid search parameters
+pop_weights <- seq(0.1, 1.0, by = 0.1)
+spatial_weights <- seq(0.1, 1.0, by = 0.1)
+
+best_overall_clusters <- NULL
+best_overall_penalty <- Inf
+best_pop_weight <- NA
+best_spatial_weight <- NA
+
+# Perform grid search
+for (pop_weight in pop_weights) {
+  for (spatial_weight in spatial_weights) {
+    result <- optimize_clusters(initial_clusters, adjacency_matrix, n_districts, target_population_per_cluster, pop_weight, spatial_weight)
+    
+    if (result$penalty < best_overall_penalty) {
+      best_overall_penalty <- result$penalty
+      best_overall_clusters <- result$clusters
+      best_pop_weight <- pop_weight
+      best_spatial_weight <- spatial_weight
+    }
+  }
+}
+
+# Add best cluster assignments to the data
+iowa_data$cluster <- as.factor(best_overall_clusters)
+
+# Check population distribution
+check_population_distribution <- function(data) {
+  population_per_cluster <- data %>%
+    group_by(cluster) %>%
+    summarise(pop = sum(pop))
+  print(population_per_cluster)
+}
+
+check_population_distribution(iowa_data)
+
+# Plot the clusters
+ggplot(data = iowa_data) +
+  geom_sf(aes(fill = cluster), color = "white") +
+  scale_fill_viridis_d() +
+  theme_minimal() +
+  labs(title = "Optimized Districts in Iowa", fill = "District") +
+  theme(axis.title = element_blank(), axis.text = element_blank())
+
+# Save the plot if needed
+ggsave("optimized_districts_iowa.png", width = 10, height = 8)
+
+# Print the best parameters
+cat("Best Population Weight:", best_pop_weight, "\n")
+cat("Best Spatial Weight:", best_spatial_weight, "\n")
+cat("Best Penalty:", best_overall_penalty, "\n")
